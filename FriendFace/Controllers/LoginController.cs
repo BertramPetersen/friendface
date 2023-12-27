@@ -1,7 +1,9 @@
 ﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
-using FriendFace.Models; // Assuming this is where your User model is located
+using FriendFace.Models;
+using FriendFace.ViewModels;
+using Microsoft.AspNetCore.Identity.UI.Services; // Assuming this is where your User model is located
 
 namespace FriendFace.Controllers
 {
@@ -9,11 +11,13 @@ namespace FriendFace.Controllers
     {
         private readonly UserManager<User> _userManager;
         private readonly SignInManager<User> _signInManager;
+        private readonly IEmailSender _emailSender;
 
-        public LoginController(UserManager<User> userManager, SignInManager<User> signInManager)
+        public LoginController(UserManager<User> userManager, SignInManager<User> signInManager, IEmailSender emailSender)
         {
             _userManager = userManager;
             _signInManager = signInManager;
+            _emailSender = emailSender;
         }
 
         // GET: Login/Register
@@ -33,9 +37,12 @@ namespace FriendFace.Controllers
                 // Handle result...
                 if (result.Succeeded)
                 {
-                    // Optionally, sign the user in after registration
-                    await _signInManager.SignInAsync(user, isPersistent: false);
-                    return RedirectToAction("Index", "Home"); // Modify as needed
+                    var token = await _userManager.GenerateTwoFactorTokenAsync(user, TokenOptions.DefaultEmailProvider);
+                    // Send the token via email
+                    await _emailSender.SendEmailAsync(user.Email, "Your 2FA Code", $"Your 2FA code is: {token}");
+
+                    // Redirect to a view where they can enter the 2FA token
+                    return RedirectToAction("VerifyTwoFactor", new { userId = user.Id });
                 }
 
                 // Handle errors
@@ -53,6 +60,37 @@ namespace FriendFace.Controllers
             
 
             return View();
+        }
+        // GET: Verify 2FA
+        public IActionResult VerifyTwoFactor(string userId)
+        {
+            // Return a view where the user can input their 2FA token
+            return View(new VerifyTwoFactorViewModel { UserId = userId });
+        }
+        
+        // POST: Verify 2FA
+        [HttpPost]
+        public async Task<IActionResult> VerifyTwoFactor(VerifyTwoFactorViewModel model)
+        {
+            var user = await _userManager.FindByIdAsync(model.UserId);
+
+            if (user != null)
+            {
+                var result =
+                    await _userManager.VerifyTwoFactorTokenAsync(user, TokenOptions.DefaultEmailProvider, model.Token);
+
+                if (result)
+                {
+                    // Sign in the user
+                    await _signInManager.SignInAsync(user, isPersistent: false);
+                    user.TwoFactorEnabled = true;
+                    await _userManager.UpdateAsync(user);
+                    return RedirectToAction("Index", "Home"); 
+                }
+            }
+
+            // Handle failure...
+            return View(model);
         }
 
         // GET: Login/Login

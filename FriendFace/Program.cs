@@ -1,10 +1,14 @@
+using System.Data.Entity;
+using FriendFace._2FA;
 using FriendFace.Data;
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using FriendFace.Data;
 using FriendFace.Services;
 using FriendFace.Services.DatabaseService;
+using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -45,6 +49,7 @@ builder.Services.AddScoped<SignInManager<User>>();
 builder.Services.AddScoped<UserManager<User>>();
 builder.Services.AddScoped<CommentService>();
 builder.Services.AddScoped<SearchService>();
+builder.Services.AddSingleton<IEmailSender, EmailSender>();
 
 
 var app = builder.Build();
